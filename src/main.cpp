@@ -1,19 +1,19 @@
 //this is for the teensy
 #include <Encoder.h>
 #include <ros.h>
-#include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Int16MultiArray.h>
 
 ros::NodeHandle nh;
 
-std_msgs::Float32MultiArray encoder_val;
+std_msgs::Int16MultiArray encoder_val;
 ros::Publisher chatter("encoders", &encoder_val);
 
 Encoder FRenc(2, 3);
-//Encoder FLenc(4, 5);
-//Encoder BRenc(0, 1);
-//Encoder BLenc(6, 7);
-//timers
-IntervalTimer myTimer;
+Encoder FLenc(4, 5);
+Encoder BRenc(0, 1);
+Encoder BLenc(6, 7);
+
+#define ENCODER_SAMPLE_TIME 50
 
 uint32_t enc_timer = 0;
 int8_t FRenc_dir = 0; //-1 = backward, 1 = forwad
@@ -36,72 +36,76 @@ void setup()
     pinMode(9, OUTPUT);
 
     //ROS variable init
-    encoder_val.layout.dim = (std_msgs::MultiArrayDimension *)
-        malloc(sizeof(std_msgs::MultiArrayDimension) * 2);
-    encoder_val.layout.dim[0].label = "encoder";
-    encoder_val.layout.dim[0].size = 4;
-    encoder_val.layout.dim[0].stride = 1;
     encoder_val.layout.data_offset = 0;
-    encoder_val.data = (float *)malloc(sizeof(float) * 8);
-    encoder_val.data_length = 4;
+    encoder_val.data = (uint16_t *)malloc(sizeof(uint16_t) * 5);
+    encoder_val.data_length = 5;
+    encoder_val.data[4] = ENCODER_SAMPLE_TIME;
 
     //ROS init
-    /*
+
     nh.initNode();
     nh.advertise(chatter);
-    */
 }
 
-long oldPosition = -999;
-long newPosition = 0;
-
-float getSpeed(Encoder encNumber)
-{
-    newPosition = encNumber.read();
-
-    if (millis() - enc_timer > 50)
-    {
-        if (newPosition != oldPosition)
-        {
-
-            if (oldPosition < newPosition)
-            {
-                FRenc_dir = 1;
-            }
-            else
-            {
-                FRenc_dir = -1;
-            }
-            //Serial.println(newPosition);
-            return (float)(newPosition / (float)0.05 * (float)60.0 / pulsePerRevolution * (float)20.42);
-            oldPosition = newPosition;
-
-            //Serial.println(FRenc_dir);
-            encNumber.write(0);
-        }
-        //encNumber.write(0);
-        enc_timer = millis();
-    }
-}
+long oldPosition_FR = -999;
+long oldPosition_FL = -999;
+long oldPosition_BR = -999;
+long oldPosition_BL = -999;
 
 void loop()
 {
 
     //encoder_val.data[0] = getSpeed(FRenc);
-    Serial.println(getSpeed(FRenc));
-    FRenc.write(0);
-    //getSpeed(FLenc);
-    //getSpeed(BRenc);
-    //BRenc.write(0);
-    //getSpeed(BLenc);
-    //Serial.println(newPosition);
-    //delay(10);
+    long newPosition_FR = FRenc.read();
+    long newPosition_FL = FLenc.read();
+    long newPosition_BR = BRenc.read();
+    long newPosition_BL = BLenc.read();
+
+    if (millis() - enc_timer > ENCODER_SAMPLE_TIME)
+    {
+        //samples encoder ticks for ENCODER_SAMPLE_TIME and checks whether or not a change occured
+        if (newPosition_FR != oldPosition_FR)
+        {
+            //float speedVal = newPosition_FR / 0.05 * 60.0 / pulsePerRevolution * 20.42;
+            //Serial.print(speedVal);
+            //Serial.print(" ");
+            //Serial.println(newPosition_FR);
+            encoder_val.data[0] = newPosition_FR;
+            FRenc.write(0);
+        }
+        if (newPosition_FL != oldPosition_FL)
+        {
+            //float speedVal = newPosition_FR / 0.05 * 60.0 / pulsePerRevolution * 20.42;
+            //Serial.print(speedVal);
+            //Serial.print(" ");
+            //Serial.println(newPosition_FR);
+            encoder_val.data[1] = newPosition_FL;
+            FLenc.write(0);
+        }
+        if (newPosition_BR != oldPosition_BR)
+        {
+            //float speedVal = newPosition_FR / 0.05 * 60.0 / pulsePerRevolution * 20.42;
+            //Serial.print(speedVal);
+            //Serial.print(" ");
+            //Serial.println(newPosition_FR);
+            encoder_val.data[2] = newPosition_BR;
+            BRenc.write(0);
+        }
+        if (newPosition_BL != oldPosition_BL)
+        {
+            //float speedVal = newPosition_FR / 0.05 * 60.0 / pulsePerRevolution * 20.42;
+            //Serial.print(speedVal);
+            //Serial.print(" ");
+            //Serial.println(newPosition_FR);
+            encoder_val.data[3] = newPosition_BL;
+            BLenc.write(0);
+        }
+        chatter.publish(&encoder_val);
+        enc_timer = millis();
+    }
+
     analogWrite(10, 200);
     analogWrite(11, 0);
-    /*
-    encoder_val.data[1] = 6.14;
-    chatter.publish(&encoder_val);
     nh.spinOnce();
     delay(10);
-    */
 }
